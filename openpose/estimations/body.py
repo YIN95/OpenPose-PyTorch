@@ -23,7 +23,6 @@ from tqdm import tqdm
 
 E = 1e-6
 
-
 class Body(object):
     def __init__(self, model_path):
         self.model = BodyModel()
@@ -242,8 +241,8 @@ class Body(object):
         return candidate, subset
 
 
-def video2skeleton2D(video_path):
-    body_estimation = Body('/media/ywj/File/C-Code/OpenPose-PyTorch/openpose/models/body_pose_model.pth')
+def video2skeleton2D(video_path, model_path):
+    body_estimation = Body(model_path)
     cap = cv2.VideoCapture(video_path)
 
     n_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
