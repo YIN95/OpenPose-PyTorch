@@ -13,6 +13,7 @@ import matplotlib
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+import PIL.Image as Image
 
 from .utils import padRightDownCorner, transfer, findLastIndex, draw_bodypose
 from torchvision import transforms
@@ -20,6 +21,7 @@ from scipy.ndimage.filters import gaussian_filter
 from ..networks import BodyModel
 from pathlib import Path
 from tqdm import tqdm
+
 
 E = 1e-6
 

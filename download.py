@@ -5,4 +5,4 @@ data = u.read()
 u.close()
 print(data)
 with open([body_pose_model.pth], "wb") as f :
-    f.write(data)
+    f.write(data)git 
