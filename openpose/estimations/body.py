@@ -5,6 +5,7 @@ Author:
     Reference: https://github.com/Hzzone/pytorch-openpose
 """
 
+import os
 import cv2
 import math
 import time
@@ -243,38 +244,62 @@ class Body(object):
         return candidate, subset
 
 
-def video2skeleton2D(video_path, model_path):
+def video2skeleton2D(video_images_path, model_path, saveImages=False, saveImages_path=''):
     body_estimation = Body(model_path)
-    cap = cv2.VideoCapture(video_path)
-
-    n_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    insertIndex = findLastIndex(video_path, '.')
-    save_path = video_path[:insertIndex] + \
-        '_skeleton2D' + video_path[insertIndex:]
-    print('save path: ', save_path)
-    video = cv2.VideoWriter(save_path,
-                            cv2.VideoWriter_fourcc(*'DIVX'),
-                            fps,
-                            (width, height))
-
+    images = os.listdir(video_images_path)
+    n_frame = len(images)
     pbar = tqdm(total=n_frame)
     pbar.set_description("Processing")
-    while(cap.isOpened()):
-        ret, frame = cap.read()
-        if not ret:
-            break
 
+    if saveImages:
+        if not os.path.isdir(saveImages_path):
+            os.makedirs(saveImages_path)
+
+    for i in range(n_frame):
+        frame_path = str(Path(video_images_path, str(i)+'.jpg'))
+        frame = cv2.imread(frame_path)
         candidate, subset = body_estimation(frame)
         canvas = copy.deepcopy(frame)
         canvas, target_points = draw_bodypose(canvas, candidate, subset)
 
-        video.write(canvas.astype(np.uint8))
-        pbar.update()
+        if saveImages:
+            temp_path = str(Path(saveImages_path, str(i)+'.jpg'))
+            cv2.imwrite(temp_path, canvas.astype(np.uint8))
 
-    cap.release()
-    video.release()
+        pbar.update()
     pbar.close()
+
+    # body_estimation = Body(model_path)
+    # cap = cv2.VideoCapture(video_images_path)
+
+    # n_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    # fps = int(cap.get(cv2.CAP_PROP_FPS))
+    # width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    # height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    # insertIndex = findLastIndex(video_images_path, '.')
+    # save_path = video_images_path[:insertIndex] + \
+    #     '_skeleton2D' + video_images_path[insertIndex:]
+    # print('save path: ', save_path)
+    # video = cv2.VideoWriter(save_path,
+    #                         cv2.VideoWriter_fourcc(*'DIVX'),
+    #                         fps,
+    #                         (width, height))
+
+    # pbar = tqdm(total=n_frame)
+    # pbar.set_description("Processing")
+    # while(cap.isOpened()):
+    #     ret, frame = cap.read()
+    #     if not ret:
+    #         break
+
+    #     candidate, subset = body_estimation(frame)
+    #     canvas = copy.deepcopy(frame)
+    #     canvas, target_points = draw_bodypose(canvas, candidate, subset)
+
+    #     video.write(canvas.astype(np.uint8))
+    #     pbar.update()
+
+    # cap.release()
+    # video.release()
+    # pbar.close()

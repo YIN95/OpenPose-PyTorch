@@ -11,7 +11,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--savePath',
         type=str,
-        default='/media/ywj/File/C-Code/OpenPose-PyTorch/results/',
+        default='/media/ywj/File/C-Code/OpenPose-PyTorch/examples/',
         help='The path of the save video images')
     args = parser.parse_args()
 

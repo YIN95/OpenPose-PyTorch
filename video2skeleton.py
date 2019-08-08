@@ -6,8 +6,13 @@ if __name__ == "__main__":
     parser.add_argument(
         '--videoPath',
         type=str,
-        default='/media/ywj/File/C-Code/OpenPose-PyTorch/examples/video.avi',
+        default='/media/ywj/File/C-Code/OpenPose-PyTorch/examples/video',
         help='The path of the video')
+    parser.add_argument(
+        '--saveImagePath',
+        type=str,
+        default='/media/ywj/File/C-Code/OpenPose-PyTorch/examples/skeletonImages',
+        help='The path of the skeleton images')
     parser.add_argument(
         '--modelPath',
         type=str,
@@ -17,5 +22,6 @@ if __name__ == "__main__":
 
     videoPath = args.videoPath
     modelPath = args.modelPath
+    saveImagePath = args.saveImagePath
 
-    op.estimations.video2skeleton2D(videoPath, modelPath)
+    op.estimations.video2skeleton2D(videoPath, modelPath, saveImages=False, saveImages_path=saveImagePath)
