@@ -36,7 +36,7 @@ class Body(object):
         self.model.eval()
 
     def __call__(self, oriImg):
-        # scale_search = [0.5, 1.0, 1.5, 2.0]
+        # scale_search = [0.5, 1.0]
         scale_search = [0.5]
         boxsize = 368
         stride = 8
@@ -44,6 +44,9 @@ class Body(object):
         thre1 = 0.1
         thre2 = 0.05
         multiplier = [x * boxsize / oriImg.shape[0] for x in scale_search]
+        print(multiplier)
+        print(oriImg.shape[0])
+        print(oriImg.shape[1])
         heatmap_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], 19))
         paf_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], 38))
 
@@ -53,10 +56,10 @@ class Body(object):
                 oriImg, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
             imageToTest_padded, pad = padRightDownCorner(
                 imageToTest, stride, padValue)
-            im = np.transpose(np.float32(
-                imageToTest_padded[:, :, :, np.newaxis]), (3, 2, 0, 1)) / 256 - 0.5
+            im = 2*(np.transpose(np.float32(
+                imageToTest_padded[:, :, :, np.newaxis]), (3, 2, 0, 1)) / 256 - 0.5)
             im = np.ascontiguousarray(im)
-
+            
             data = torch.from_numpy(im).float()
             if torch.cuda.is_available():
                 data = data.cuda()
@@ -268,38 +271,3 @@ def video2skeleton2D(video_images_path, model_path, saveImages=False, saveImages
 
         pbar.update()
     pbar.close()
-
-    # body_estimation = Body(model_path)
-    # cap = cv2.VideoCapture(video_images_path)
-
-    # n_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    # fps = int(cap.get(cv2.CAP_PROP_FPS))
-    # width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    # height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    # insertIndex = findLastIndex(video_images_path, '.')
-    # save_path = video_images_path[:insertIndex] + \
-    #     '_skeleton2D' + video_images_path[insertIndex:]
-    # print('save path: ', save_path)
-    # video = cv2.VideoWriter(save_path,
-    #                         cv2.VideoWriter_fourcc(*'DIVX'),
-    #                         fps,
-    #                         (width, height))
-
-    # pbar = tqdm(total=n_frame)
-    # pbar.set_description("Processing")
-    # while(cap.isOpened()):
-    #     ret, frame = cap.read()
-    #     if not ret:
-    #         break
-
-    #     candidate, subset = body_estimation(frame)
-    #     canvas = copy.deepcopy(frame)
-    #     canvas, target_points = draw_bodypose(canvas, candidate, subset)
-
-    #     video.write(canvas.astype(np.uint8))
-    #     pbar.update()
-
-    # cap.release()
-    # video.release()
-    # pbar.close()

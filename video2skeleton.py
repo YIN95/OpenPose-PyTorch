@@ -24,4 +24,4 @@ if __name__ == "__main__":
     modelPath = args.modelPath
     saveImagePath = args.saveImagePath
 
-    op.estimations.video2skeleton2D(videoPath, modelPath, saveImages=False, saveImages_path=saveImagePath)
+    op.estimations.video2skeleton2D(videoPath, modelPath, saveImages=True, saveImages_path=saveImagePath)
