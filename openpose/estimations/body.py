@@ -251,6 +251,7 @@ def video2skeleton2D(video_images_path, model_path, saveImages=False, saveImages
     body_estimation = Body(model_path)
     images = os.listdir(video_images_path)
     n_frame = len(images)
+
     pbar = tqdm(total=n_frame)
     pbar.set_description("Processing")
 
