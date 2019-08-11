@@ -71,7 +71,7 @@ class Body(object):
             heatmap = cv2.resize(heatmap, (0, 0), fx=stride,
                                     fy=stride, interpolation=cv2.INTER_CUBIC)
             heatmap = heatmap[:size[0], :size[1], :]
-            
+            heatmap = cv2.resize(heatmap, (oriImg.shape[1], oriImg.shape[0]), interpolation=cv2.INTER_CUBIC)
 
 
 # ==================================================================
@@ -93,7 +93,7 @@ class Body(object):
         heatmap = np.transpose(np.squeeze(Mconv7_stage6_L2), (1, 2, 0))
         heatmap = cv2.resize(heatmap, (0, 0), fx=stride,
                                 fy=stride, interpolation=cv2.INTER_CUBIC)
-        heatmap = heatmap[:size[0], :size[1], :]
+        heatmap = heatmap[:imageToTest_padded.shape[0]-pad[2], :imageToTest_padded.shape[1] - pad[3], :]
         heatmap = cv2.resize(
             heatmap, (oriImg.shape[1], oriImg.shape[0]), interpolation=cv2.INTER_CUBIC)
 
