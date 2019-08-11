@@ -12,7 +12,7 @@ from torchvision import transforms
 import torch
 import os
 import cv2
-from torch.utils.data import Dataset, DataLoader, random_split, Sampler
+from torch.utils.data import Dataset, DataLoader
 
 def get_transform(mode='default', size=(0, 0), stride=8, padding=(0, 0, 0, 0), padValue=128):
     assert (size != (0, 0)), \
@@ -46,7 +46,7 @@ class ImagesData(Dataset):
         self.size = (
             int(self.search_scale * self.boxsize),
             int(self.search_scale * self.boxsize * self.origin_size[1] / self.origin_size[0]))
-        print(self.size)
+
         self.stride = 8
         self.padValue = 128
 
@@ -59,7 +59,6 @@ class ImagesData(Dataset):
             self.padding[3] = self.stride - (self.size[0] % self.stride)
         self.padding =tuple(self.padding)
 
-        print(self.padding)
         self.transfrom = get_transform(
             mode=self.mode,
             size=self.size,

@@ -17,12 +17,14 @@ import matplotlib.pyplot as plt
 import PIL.Image as Image
 
 from .utils import padRightDownCorner, transfer, findLastIndex, draw_bodypose
+from ..networks import BodyModel
+from ..dataloader import ImagesData
+
 from torchvision import transforms
 from scipy.ndimage.filters import gaussian_filter
-from ..networks import BodyModel
 from pathlib import Path
 from tqdm import tqdm
-
+from torch.utils.data import Dataset, DataLoader
 
 E = 1e-6
 
@@ -35,60 +37,77 @@ class Body(object):
         self.model.load_state_dict(model_dict)
         self.model.eval()
 
-    def __call__(self, oriImg):
-        # scale_search = [0.5, 1.0]
-        scale_search = [0.5]
-        boxsize = 368
-        stride = 8
-        padValue = 128
+    def __call__(self, dataset:ImagesData):
+
+        # setting
+        dataloader = DataLoader(dataset, batch_size=1, sampler=None)
+
+        search_scale = dataset.search_scale
+        boxsize = dataset.boxsize
+        stride = dataset.stride
+        padValue = dataset.padValue
+        origin_size = dataset.origin_size
         thre1 = 0.1
         thre2 = 0.05
-        multiplier = [x * boxsize / oriImg.shape[0] for x in scale_search]
-        print(multiplier)
-        print(oriImg.shape[0])
-        print(oriImg.shape[1])
-        heatmap_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], 19))
-        paf_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], 38))
+        pad = dataset.padding
+        size = dataset.size
 
-        for m in range(len(multiplier)):
-            scale = multiplier[m]
-            imageToTest = cv2.resize(
-                oriImg, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-            imageToTest_padded, pad = padRightDownCorner(
-                imageToTest, stride, padValue)
-            im = 2*(np.transpose(np.float32(
-                imageToTest_padded[:, :, :, np.newaxis]), (3, 2, 0, 1)) / 256 - 0.5)
-            im = np.ascontiguousarray(im)
-            
-            data = torch.from_numpy(im).float()
+        # heatmap, paf
+        heatmap_avg = np.zeros((origin_size[0], origin_size[1], 19))
+        paf_avg = np.zeros((origin_size[0], origin_size[1], 38))
+
+        # load data
+        for data in tqdm(dataloader):
             if torch.cuda.is_available():
                 data = data.cuda()
             with torch.no_grad():
                 Mconv7_stage6_L1, Mconv7_stage6_L2 = self.model(data)
+            
+            # output of the model
             Mconv7_stage6_L1 = Mconv7_stage6_L1.cpu().numpy()
             Mconv7_stage6_L2 = Mconv7_stage6_L2.cpu().numpy()
-
-            # extract outputs, resize, and remove padding
-            # output 1 is heatmaps
+            
             heatmap = np.transpose(np.squeeze(Mconv7_stage6_L2), (1, 2, 0))
             heatmap = cv2.resize(heatmap, (0, 0), fx=stride,
-                                 fy=stride, interpolation=cv2.INTER_CUBIC)
-            heatmap = heatmap[:imageToTest_padded.shape[0] -
-                              pad[2], :imageToTest_padded.shape[1] - pad[3], :]
-            heatmap = cv2.resize(
-                heatmap, (oriImg.shape[1], oriImg.shape[0]), interpolation=cv2.INTER_CUBIC)
+                                    fy=stride, interpolation=cv2.INTER_CUBIC)
+            heatmap = heatmap[:size[0], :size[1], :]
+            
 
-            paf = np.transpose(np.squeeze(Mconv7_stage6_L1),
-                               (1, 2, 0))  # output 0 is PAFs
-            paf = cv2.resize(paf, (0, 0), fx=stride, fy=stride,
-                             interpolation=cv2.INTER_CUBIC)
-            paf = paf[:imageToTest_padded.shape[0] - pad[2],
-                      :imageToTest_padded.shape[1] - pad[3], :]
-            paf = cv2.resize(
-                paf, (oriImg.shape[1], oriImg.shape[0]), interpolation=cv2.INTER_CUBIC)
 
-            heatmap_avg += heatmap_avg + heatmap / len(multiplier)
-            paf_avg += + paf / len(multiplier)
+# ==================================================================
+
+        imageToTest = cv2.resize(
+            oriImg, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        imageToTest_padded, pad = padRightDownCorner(
+            imageToTest, stride, padValue)
+        
+        if torch.cuda.is_available():
+            data = data.cuda()
+        with torch.no_grad():
+            Mconv7_stage6_L1, Mconv7_stage6_L2 = self.model(data)
+        Mconv7_stage6_L1 = Mconv7_stage6_L1.cpu().numpy()
+        Mconv7_stage6_L2 = Mconv7_stage6_L2.cpu().numpy()
+
+        # extract outputs, resize, and remove padding
+        # output 1 is heatmaps
+        heatmap = np.transpose(np.squeeze(Mconv7_stage6_L2), (1, 2, 0))
+        heatmap = cv2.resize(heatmap, (0, 0), fx=stride,
+                                fy=stride, interpolation=cv2.INTER_CUBIC)
+        heatmap = heatmap[:size[0], :size[1], :]
+        heatmap = cv2.resize(
+            heatmap, (oriImg.shape[1], oriImg.shape[0]), interpolation=cv2.INTER_CUBIC)
+
+        paf = np.transpose(np.squeeze(Mconv7_stage6_L1),
+                            (1, 2, 0))  # output 0 is PAFs
+        paf = cv2.resize(paf, (0, 0), fx=stride, fy=stride,
+                            interpolation=cv2.INTER_CUBIC)
+        paf = paf[:imageToTest_padded.shape[0] - pad[2],
+                    :imageToTest_padded.shape[1] - pad[3], :]
+        paf = cv2.resize(
+            paf, (oriImg.shape[1], oriImg.shape[0]), interpolation=cv2.INTER_CUBIC)
+
+        heatmap_avg += heatmap_avg + heatmap
+        paf_avg += + paf
 
         all_peaks = []
         peak_counter = 0
@@ -248,27 +267,24 @@ class Body(object):
 
 
 def video2skeleton2D(video_images_path, model_path, saveImages=False, saveImages_path=''):
-    body_estimation = Body(model_path)
-    images = os.listdir(video_images_path)
-    n_frame = len(images)
-
-    pbar = tqdm(total=n_frame)
-    pbar.set_description("Processing")
-
     if saveImages:
         if not os.path.isdir(saveImages_path):
             os.makedirs(saveImages_path)
 
-    for i in range(n_frame):
-        frame_path = str(Path(video_images_path, str(i)+'.jpg'))
-        frame = cv2.imread(frame_path)
-        candidate, subset = body_estimation(frame)
-        canvas = copy.deepcopy(frame)
-        canvas, target_points = draw_bodypose(canvas, candidate, subset)
+    body_estimation = Body(model_path)
+    data = ImagesData(data_path=video_images_path, mode='default')
+    
+    candidate, subset = body_estimation(data)
 
-        if saveImages:
-            temp_path = str(Path(saveImages_path, str(i)+'.jpg'))
-            cv2.imwrite(temp_path, canvas.astype(np.uint8))
 
-        pbar.update()
-    pbar.close()
+
+
+    
+    # for inputs in tqdm(data_loader):
+    #     candidate, subset = body_estimation(inputs)
+    #     canvas = copy.deepcopy(inputs)
+    #     canvas, target_points = draw_bodypose(canvas, candidate, subset)
+
+    #     if saveImages:
+    #         temp_path = str(Path(saveImages_path, str(i)+'.jpg'))
+    #         cv2.imwrite(temp_path, canvas.astype(np.uint8))
