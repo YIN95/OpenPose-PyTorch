@@ -15,16 +15,21 @@ import cv2
 from torch.utils.data import Dataset, DataLoader
 
 def get_transform(mode='default', size=(0, 0), stride=8, padding=(0, 0, 0, 0), padValue=128):
-    assert (size != (0, 0)), \
-        "The size of the image should not be (0, 0)."
-
+    
     if mode in ['default']:
-
+        assert (size != (0, 0)), \
+            "The size of the image should not be (0, 0)."
         return transforms.Compose([
             transforms.Resize(size=size, interpolation=Image.BICUBIC),
             transforms.Pad(padding=padding, fill=padValue, padding_mode='constant'),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5])
+        ])
+
+    if mode in ['tensor']:
+
+        return transforms.Compose([
+            transforms.ToTensor(),
         ])
 
 
@@ -65,16 +70,18 @@ class ImagesData(Dataset):
             stride=self.stride,
             padding=self.padding,
             padValue=self.padValue)
+        self.transform_tensor = get_transform(mode='tensor')
 
     def __len__(self):
         return len(self.images)
 
     def __getitem__(self, index):
         img_path = str(Path(self.data_path, self.images[index]))
-        image = Image.open(img_path)
-        image = self.transfrom(image)
+        image_origin = Image.open(img_path)
+        image = self.transfrom(image_origin)
+        image_origin = self.transform_tensor(image_origin)
         # print(image.size())
-        return image
+        return image, image_origin
 
 
 if __name__ == '__main__':
@@ -82,5 +89,5 @@ if __name__ == '__main__':
         data_path='/media/ywj/File/C-Code/OpenPose-PyTorch/examples/video',
         mode='default')
     data_loader = DataLoader(data, batch_size=1, sampler=None)
-    for image in tqdm(data_loader, total=len(data_loader)):
-        print(image.size())
+    for image, image_origin in tqdm(data_loader, total=len(data_loader)):
+        print(image.size(), image_origin.size())
