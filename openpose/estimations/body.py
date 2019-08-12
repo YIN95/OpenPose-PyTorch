@@ -28,8 +28,10 @@ from torch.utils.data import Dataset, DataLoader
 
 E = 1e-6
 
+
 class Body(object):
     def __init__(self, model_path):
+        # load model
         self.model = BodyModel()
         if torch.cuda.is_available():
             self.model = self.model.cuda()
@@ -37,7 +39,20 @@ class Body(object):
         self.model.load_state_dict(model_dict)
         self.model.eval()
 
-    def __call__(self, dataset:ImagesData):
+        # find connection in the specified sequence, center 29 is in the position 15
+        self.limbSeq = [[2, 3], [2, 6], [3, 4], [4, 5], 
+                        [6, 7], [7, 8], [2, 9], [9, 10],
+                        [10, 11], [2, 12], [12, 13], [13, 14], 
+                        [2, 1], [1, 15], [15, 17], [1, 16], 
+                        [16, 18], [3, 17], [6, 18]]
+        # the middle joints heatmap correpondence
+        self.mapIdx = [[31, 32], [39, 40], [33, 34], [35, 36], 
+                       [41, 42], [43, 44], [19, 20], [21, 22],
+                       [23, 24], [25, 26], [27, 28], [29, 30], 
+                       [47, 48], [49, 50], [53, 54], [51, 52],
+                       [55, 56], [37, 38], [45, 46]]
+
+    def __call__(self, dataset: ImagesData):
 
         # setting
         dataloader = DataLoader(dataset, batch_size=1, sampler=None)
@@ -52,42 +67,39 @@ class Body(object):
         pad = dataset.padding
         size = dataset.size
 
-        # heatmap, paf
-        heatmap_avg = np.zeros((origin_size[0], origin_size[1], 19))
-        paf_avg = np.zeros((origin_size[0], origin_size[1], 38))
-
         # load data
         count = 0
         for data, origin in tqdm(dataloader):
+            # heatmap, paf
             if torch.cuda.is_available():
                 data = data.cuda()
             with torch.no_grad():
                 # PAF, HeatMap
                 Mconv7_stage6_L1, Mconv7_stage6_L2 = self.model(data)
-            
+
             # output of the model
             Mconv7_stage6_L1 = Mconv7_stage6_L1.cpu().numpy()
             Mconv7_stage6_L2 = Mconv7_stage6_L2.cpu().numpy()
-            
+
             heatmap = np.transpose(np.squeeze(Mconv7_stage6_L2), (1, 2, 0))
             heatmap = cv2.resize(heatmap, (0, 0), fx=stride,
-                                    fy=stride, interpolation=cv2.INTER_CUBIC)
+                                 fy=stride, interpolation=cv2.INTER_CUBIC)
             heatmap = heatmap[:size[0], :size[1], :]
-            heatmap = cv2.resize(heatmap, (origin_size[1], origin_size[0]), interpolation=cv2.INTER_CUBIC)
-            
-            paf = np.transpose(np.squeeze(Mconv7_stage6_L1), (1, 2, 0))
-            paf = cv2.resize(paf, (0, 0), fx=stride, fy=stride, interpolation=cv2.INTER_CUBIC)
-            paf = paf[:size[0], :size[1], :]
-            paf = cv2.resize(paf, (origin_size[1], origin_size[0]), interpolation=cv2.INTER_CUBIC)
+            heatmap = cv2.resize(
+                heatmap, (origin_size[1], origin_size[0]), interpolation=cv2.INTER_CUBIC)
 
-            heatmap_avg += heatmap_avg + heatmap
-            paf_avg += + paf
+            paf = np.transpose(np.squeeze(Mconv7_stage6_L1), (1, 2, 0))
+            paf = cv2.resize(paf, (0, 0), fx=stride, fy=stride,
+                             interpolation=cv2.INTER_CUBIC)
+            paf = paf[:size[0], :size[1], :]
+            paf = cv2.resize(
+                paf, (origin_size[1], origin_size[0]), interpolation=cv2.INTER_CUBIC)
 
             all_peaks = []
             peak_counter = 0
 
             for part in range(18):
-                map_ori = heatmap_avg[:, :, part]
+                map_ori = heatmap[:, :, part]
                 one_heatmap = gaussian_filter(map_ori, sigma=3)
 
                 map_left = np.zeros(one_heatmap.shape)
@@ -111,28 +123,17 @@ class Body(object):
                 all_peaks.append(peaks_with_score_and_id)
                 peak_counter += len(peaks)
 
-            # find connection in the specified sequence, center 29 is in the position 15
-            limbSeq = [[2, 3], [2, 6], [3, 4], [4, 5], [6, 7], [7, 8], [2, 9], [9, 10],
-                    [10, 11], [2, 12], [12, 13], [
-                        13, 14], [2, 1], [1, 15], [15, 17],
-                    [1, 16], [16, 18], [3, 17], [6, 18]]
-            # the middle joints heatmap correpondence
-            mapIdx = [[31, 32], [39, 40], [33, 34], [35, 36], [41, 42], [43, 44], [19, 20], [21, 22],
-                    [23, 24], [25, 26], [27, 28], [29, 30], [
-                        47, 48], [49, 50], [53, 54], [51, 52],
-                    [55, 56], [37, 38], [45, 46]]
-
             connection_all = []
             special_k = []
             mid_num = 10
 
-            for k in range(len(mapIdx)):
-                score_mid = paf_avg[:, :, [x - 19 for x in mapIdx[k]]]
-                candA = all_peaks[limbSeq[k][0] - 1]
-                candB = all_peaks[limbSeq[k][1] - 1]
+            for k in range(len(self.mapIdx)):
+                score_mid = paf[:, :, [x - 19 for x in self.mapIdx[k]]]
+                candA = all_peaks[self.limbSeq[k][0] - 1]
+                candB = all_peaks[self.limbSeq[k][1] - 1]
                 nA = len(candA)
                 nB = len(candB)
-                indexA, indexB = limbSeq[k]
+                indexA, indexB = self.limbSeq[k]
                 if (nA != 0 and nB != 0):
                     connection_candidate = []
                     for i in range(nA):
@@ -145,16 +146,16 @@ class Body(object):
                                                 np.linspace(candA[i][1], candB[j][1], num=mid_num)))
 
                             vec_x = np.array([score_mid[int(round(startend[I][1])), int(round(startend[I][0])), 0]
-                                            for I in range(len(startend))])
+                                              for I in range(len(startend))])
                             vec_y = np.array([score_mid[int(round(startend[I][1])), int(round(startend[I][0])), 1]
-                                            for I in range(len(startend))])
+                                              for I in range(len(startend))])
 
                             score_midpts = np.multiply(
                                 vec_x, vec[0]) + np.multiply(vec_y, vec[1])
                             score_with_dist_prior = sum(score_midpts) / len(score_midpts) + min(
                                 (0.5 * origin_size[0] + E) / (norm - 1 + E), 0)
                             criterion1 = len(np.nonzero(score_midpts > thre2)[
-                                            0]) > 0.8 * len(score_midpts)
+                                0]) > 0.8 * len(score_midpts)
                             criterion2 = score_with_dist_prior > 0
                             if criterion1 and criterion2:
                                 connection_candidate.append(
@@ -182,11 +183,11 @@ class Body(object):
             candidate = np.array(
                 [item for sublist in all_peaks for item in sublist])
 
-            for k in range(len(mapIdx)):
+            for k in range(len(self.mapIdx)):
                 if k not in special_k:
                     partAs = connection_all[k][:, 0]
                     partBs = connection_all[k][:, 1]
-                    indexA, indexB = np.array(limbSeq[k]) - 1
+                    indexA, indexB = np.array(self.limbSeq[k]) - 1
 
                     for i in range(len(connection_all[k])):  # = 1:size(temp,1)
                         found = 0
@@ -207,7 +208,8 @@ class Body(object):
                             j1, j2 = subset_idx
                             membership = ((subset[j1] >= 0).astype(
                                 int) + (subset[j2] >= 0).astype(int))[:-2]
-                            if len(np.nonzero(membership == 2)[0]) == 0:  # merge
+                            # merge
+                            if len(np.nonzero(membership == 2)[0]) == 0:
                                 subset[j1][:-2] += (subset[j2][:-2] + 1)
                                 subset[j1][-2:] += subset[j2][-2:]
                                 subset[j1][-2] += connection_all[k][i][2]
@@ -225,7 +227,7 @@ class Body(object):
                             row[indexB] = partBs[i]
                             row[-1] = 2
                             row[-2] = sum(candidate[connection_all[k][i,
-                                                                    :2].astype(int), 2]) + connection_all[k][i][2]
+                                                                      :2].astype(int), 2]) + connection_all[k][i][2]
                             subset = np.vstack([subset, row])
             # delete some rows of subset which has few parts occur
             deleteIdx = []
@@ -236,8 +238,9 @@ class Body(object):
 
             # subset: n*20 array, 0-17 is the index in candidate, 18 is the total score, 19 is the total parts
             # candidate: x, y, score, id
-            
-            origin_images = origin.numpy()
+
+            origin_images = origin[0].numpy().transpose(1, 2, 0)*256
+            origin_images = cv2.cvtColor(origin_images, cv2.COLOR_BGR2RGB)
             canvas = copy.deepcopy(origin_images)
             canvas, target_points = draw_bodypose(canvas, candidate, subset)
             saveImages_path = '/media/ywj/File/C-Code/OpenPose-PyTorch/examples/skeletonImages'
@@ -245,7 +248,7 @@ class Body(object):
             count += 1
             cv2.imwrite(temp_path, canvas.astype(np.uint8))
 
-        return candidate, subset
+        # return candidate, subset
 
 
 def video2skeleton2D(video_images_path, model_path, saveImages=False, saveImages_path=''):
@@ -255,13 +258,9 @@ def video2skeleton2D(video_images_path, model_path, saveImages=False, saveImages
 
     body_estimation = Body(model_path)
     data = ImagesData(data_path=video_images_path, mode='default')
-    
-    candidate, subset = body_estimation(data)
 
+    body_estimation(data)
 
-
-
-    
     # for inputs in tqdm(data_loader):
     #     candidate, subset = body_estimation(inputs)
     #     canvas = copy.deepcopy(inputs)

@@ -2,7 +2,6 @@
 """
 Author:
     Wenjie Yin, yinw@kth.se
-    Reference: https://github.com/Hzzone/pytorch-openpose
 """
 
 import PIL.Image as Image
@@ -76,9 +75,9 @@ class ImagesData(Dataset):
         return len(self.images)
 
     def __getitem__(self, index):
-        img_path = str(Path(self.data_path, self.images[index]))
+        img_path = str(Path(self.data_path, str(index)+'.jpg'))
         image_origin = Image.open(img_path)
-        image = self.transfrom(image_origin)
+        image = self.transfrom(image_origin) 
         image_origin = self.transform_tensor(image_origin)
         # print(image.size())
         return image, image_origin
