@@ -52,6 +52,16 @@ class Body(object):
                        [47, 48], [49, 50], [53, 54], [51, 52],
                        [55, 56], [37, 38], [45, 46]]
 
+    def removepad_resize(self, input, stride, size, origin_size):
+        output = np.transpose(np.squeeze(input), (1, 2, 0))
+        output = cv2.resize(output, (0, 0), fx=stride,
+                                fy=stride, interpolation=cv2.INTER_CUBIC)
+        output = output[:size[0], :size[1], :]
+        output = cv2.resize(
+            output, (origin_size[1], origin_size[0]), interpolation=cv2.INTER_CUBIC)
+
+        return output
+
     def __call__(self, dataset: ImagesData):
 
         # setting
@@ -80,21 +90,10 @@ class Body(object):
             # output of the model
             Mconv7_stage6_L1 = Mconv7_stage6_L1.cpu().numpy()
             Mconv7_stage6_L2 = Mconv7_stage6_L2.cpu().numpy()
-
-            heatmap = np.transpose(np.squeeze(Mconv7_stage6_L2), (1, 2, 0))
-            heatmap = cv2.resize(heatmap, (0, 0), fx=stride,
-                                 fy=stride, interpolation=cv2.INTER_CUBIC)
-            heatmap = heatmap[:size[0], :size[1], :]
-            heatmap = cv2.resize(
-                heatmap, (origin_size[1], origin_size[0]), interpolation=cv2.INTER_CUBIC)
-
-            paf = np.transpose(np.squeeze(Mconv7_stage6_L1), (1, 2, 0))
-            paf = cv2.resize(paf, (0, 0), fx=stride, fy=stride,
-                             interpolation=cv2.INTER_CUBIC)
-            paf = paf[:size[0], :size[1], :]
-            paf = cv2.resize(
-                paf, (origin_size[1], origin_size[0]), interpolation=cv2.INTER_CUBIC)
-
+            
+            heatmap = self.removepad_resize(Mconv7_stage6_L2, stride, size, origin_size)
+            paf = self.removepad_resize(Mconv7_stage6_L1, stride, size, origin_size)
+     
             all_peaks = []
             peak_counter = 0
 

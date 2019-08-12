@@ -46,9 +46,6 @@ def video2images(video_path, save_path):
     pbar.close()
     cap.release()
 
-def funcname(self, parameter_list):
-    pass
-
 if __name__ == "__main__":
     video_path = '/media/ywj/File/C-Code/OpenPose-PyTorch/examples/video.avi'
     save_path = '/media/ywj/File/C-Code/OpenPose-PyTorch/results/'
