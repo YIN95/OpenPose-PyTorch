@@ -53,10 +53,20 @@ class Body(object):
                        [55, 56], [37, 38], [45, 46]]
 
     def removepad_resize(self, input, stride, size, origin_size):
-        output = np.transpose(np.squeeze(input), (1, 2, 0))
+        output = np.transpose(input, (0, 2, 3, 1))
+        # input: (1, 19, 23, 41)
+
+        # transpose: (1, 19, 23, 41) -> (1, 23, 41, 19)
+        output = np.transpose(input, (0, 2, 3, 1))
+        # resize: (23, 41, 19) -> (184, 328, 19)
+        # peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in peaks]
+
+        # output[i, :] = [cv2.resize(output[i, :], (0, 0), fx=stride, fy=stride, interpolation=cv2.INTER_CUBIC), for i in len(output)]
         output = cv2.resize(output, (0, 0), fx=stride,
                                 fy=stride, interpolation=cv2.INTER_CUBIC)
+        # remove padding: (184, 328, 19) -> (184, 327, 19)
         output = output[:size[0], :size[1], :]
+        # resize: (184, 327, 19) -> (720, 1280, 19)
         output = cv2.resize(
             output, (origin_size[1], origin_size[0]), interpolation=cv2.INTER_CUBIC)
 
