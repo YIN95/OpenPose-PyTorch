@@ -21,7 +21,7 @@ from ..networks import BodyModel
 from ..dataloader import ImagesData
 
 from torchvision import transforms
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage.filters import gaussian_filter, gaussian_filter1d
 from pathlib import Path
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
@@ -45,7 +45,7 @@ class Body(object):
                         [10, 11], [2, 12], [12, 13], [13, 14], 
                         [2, 1], [1, 15], [15, 17], [1, 16], 
                         [16, 18], [3, 17], [6, 18]]
-        # the middle joints heatmap correpondence
+        # the middle joints heatmap correpondenceheatmap.copy()
         self.mapIdx = [[31, 32], [39, 40], [33, 34], [35, 36], 
                        [41, 42], [43, 44], [19, 20], [21, 22],
                        [23, 24], [25, 26], [27, 28], [29, 30], 
@@ -53,23 +53,23 @@ class Body(object):
                        [55, 56], [37, 38], [45, 46]]
 
     def removepad_resize(self, input, stride, size, origin_size):
-        output = np.transpose(input, (0, 2, 3, 1))
         # input: (1, 19, 23, 41)
-
         # transpose: (1, 19, 23, 41) -> (1, 23, 41, 19)
         output = np.transpose(input, (0, 2, 3, 1))
-        # resize: (23, 41, 19) -> (184, 328, 19)
-        # peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in peaks]
 
-        # output[i, :] = [cv2.resize(output[i, :], (0, 0), fx=stride, fy=stride, interpolation=cv2.INTER_CUBIC), for i in len(output)]
-        output = cv2.resize(output, (0, 0), fx=stride,
-                                fy=stride, interpolation=cv2.INTER_CUBIC)
-        # remove padding: (184, 328, 19) -> (184, 327, 19)
-        output = output[:size[0], :size[1], :]
-        # resize: (184, 327, 19) -> (720, 1280, 19)
-        output = cv2.resize(
-            output, (origin_size[1], origin_size[0]), interpolation=cv2.INTER_CUBIC)
+        # resize: (1, 23, 41, 19) -> (1, 184, 328, 19)        
+        output = [cv2.resize(output[i, :], (0, 0), fx=stride, fy=stride, interpolation=cv2.INTER_CUBIC) for i in range(len(output))]
+        output = np.asarray(output)
+        
+        # remove padding: (1, 184, 328, 19) -> (1, 184, 327, 19)
+        output = output[:, :size[0], :size[1], :]
 
+        # resize: (1, 184, 327, 19) -> (1, 720, 1280, 19)
+        output = [cv2.resize(output[i, :], (origin_size[1], origin_size[0]), interpolation=cv2.INTER_CUBIC) for i in range(len(output))]
+        output = np.asarray(output)
+        
+        # 
+        output = output[0]
         return output
 
     def __call__(self, dataset: ImagesData):
@@ -99,6 +99,7 @@ class Body(object):
 
             # output of the model
             Mconv7_stage6_L1 = Mconv7_stage6_L1.cpu().numpy()
+            
             Mconv7_stage6_L2 = Mconv7_stage6_L2.cpu().numpy()
             
             heatmap = self.removepad_resize(Mconv7_stage6_L2, stride, size, origin_size)
@@ -106,10 +107,13 @@ class Body(object):
      
             all_peaks = []
             peak_counter = 0
+            
 
-            for part in range(18):
+            for part in range(19):
                 map_ori = heatmap[:, :, part]
-                one_heatmap = gaussian_filter(map_ori, sigma=3)
+                one_heatmap = gaussian_filter1d(map_ori, sigma=3, axis=0)
+                one_heatmap = gaussian_filter1d(one_heatmap, sigma=3, axis=1)
+                # one_heatmap = gaussian_filter(map_ori, sigma=3)
 
                 map_left = np.zeros(one_heatmap.shape)
                 map_left[1:, :] = one_heatmap[:-1, :]
@@ -122,15 +126,46 @@ class Body(object):
 
                 peaks_binary = np.logical_and.reduce(
                     (one_heatmap >= map_left, one_heatmap >= map_right, one_heatmap >= map_up, one_heatmap >= map_down, one_heatmap > thre1))
+
                 peaks = list(zip(np.nonzero(peaks_binary)[1], np.nonzero(
                     peaks_binary)[0]))  # note reverse
+
                 peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in peaks]
+
                 peak_id = range(peak_counter, peak_counter + len(peaks))
+                
                 peaks_with_score_and_id = [
                     peaks_with_score[i] + (peak_id[i],) for i in range(len(peak_id))]
 
                 all_peaks.append(peaks_with_score_and_id)
                 peak_counter += len(peaks)
+
+            # 
+            map_ori = copy.deepcopy(heatmap)
+            heatmap = gaussian_filter1d(heatmap, sigma=3, axis=0)
+            heatmap = gaussian_filter1d(heatmap, sigma=3, axis=1)
+
+            map_left = np.zeros(heatmap.shape)
+            map_right = np.zeros(heatmap.shape)
+            map_up = np.zeros(heatmap.shape)
+            map_down = np.zeros(heatmap.shape)
+
+            map_left[1:, :, :] = heatmap[:-1, :, :]
+            map_right[:-1, :, :] = heatmap[1:, :, :]
+            map_up[:, 1:, :] = heatmap[:, :-1, :]
+            map_down[:, :-1, :] = heatmap[:, 1:, :]
+
+            peaks_binary = np.logical_and.reduce(
+                (heatmap >= map_left, heatmap >= map_right, heatmap >= map_up, heatmap >= map_down, heatmap >= thre1)
+            )
+            peaks = list(
+                zip(np.nonzero(peaks_binary)[1], np.nonzero(peaks_binary)[0], np.nonzero(peaks_binary)[2])
+            )
+            peaks_with_score = [x + (map_ori[x[1], x[0], x[2]],) for x in peaks]
+            peak_id = range(0, len(peaks))
+            peaks_with_score_and_id = [peaks_with_score[i] + (peak_id[i],) for i in range(len(peak_id))]
+
+            # 
 
             connection_all = []
             special_k = []
